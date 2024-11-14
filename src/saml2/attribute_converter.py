@@ -317,27 +317,50 @@ class AttributeConverter:
                 raise
 
         val = []
+        structured_data = {}
+
         for value in attribute.attribute_value:
             if value.extension_elements:
-                ext = extension_elements_to_elements(value.extension_elements, [saml])
+                ext = extension_elements_to_elements(value.extension_elements, [saml], True)
                 for ex in ext:
-                    if attr == "eduPersonTargetedID" and ex.text:
-                        val.append(ex.text.strip())
-                    else:
-                        cval = {}
-                        for key, (name, typ, mul) in ex.c_attributes.items():
-                            exv = getattr(ex, name)
-                            if exv:
-                                cval[name] = exv
+                    try:
+                        logger.debug(f"EXTENSION ELEMENT: {vars(ex)}")
+
+                        if attr == "eduPersonTargetedID" and ex.text:
+                            val.append(ex.text.strip())
+                            continue
+
                         if ex.text:
-                            cval["value"] = ex.text.strip()
-                        val.append({ex.c_tag: cval})
+                            structured_data[ex.tag] = ex.text.strip()
+                            logger.info(f"Gefundenes Unterattribut {ex.tag}: {ex.text.strip()}")
+
+                        if hasattr(ex, 'c_attributes') and ex.c_attributes:
+                            cval = {}
+                            for key, (name, typ, mul) in ex.c_attributes.items():
+                                exv = getattr(ex, name, None)
+                                if exv:
+                                    cval[name] = exv
+                            if ex.text:
+                                cval["value"] = ex.text.strip()
+                            if cval:
+                                val.append({ex.tag: cval}) 
+
+                    except Exception as e:
+                        logger.error(f"Fehler in der Schleife für Extension Elements: {e}")
+                        continue
+
             elif not value.text:
                 val.append("")
             else:
                 val.append(value.text.strip())
 
-        return attr, val
+        if structured_data:
+            json_output = json.dumps(structured_data, ensure_ascii=False)
+            val.append(json_output)
+            logger.debug(f"JSON-Ausgabe für Unterattribute: {json_output}")
+
+        combined_val = ", ".join(val)
+        return attr, combined_val
 
     def fro(self, statement):
         """Get the attributes and the attribute values.
