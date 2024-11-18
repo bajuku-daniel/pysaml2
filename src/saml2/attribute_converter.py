@@ -5,6 +5,7 @@ from importlib import import_module
 import logging
 import os
 import sys
+import json
 
 from saml2 import NAMESPACE
 from saml2 import ExtensionElement
